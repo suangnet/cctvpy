@@ -14,3 +14,9 @@ plans/
 # OS Generated Files
 .DS_Store
 Thumbs.db
+
+# AI Agent
+.roo/
+
+# Other
+*.txt
