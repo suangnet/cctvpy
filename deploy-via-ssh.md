@@ -68,7 +68,7 @@ Windows OpenSSH secara default mengabaikan `~/.ssh/authorized_keys` jika akun te
 
 Pilih salah satu solusi di bawah:
 
-**Opsi 1 (Disarankan — Samakan standar Linux/OpenSSH):**
+**Opsi 1 (Disarankan: Samakan dengan standar OpenSSH):**
 
 1. Buka PowerShell (Run as Administrator) di Windows 11 target.
 2. Edit file konfigurasi `C:\ProgramData\ssh\sshd_config`:
@@ -171,7 +171,7 @@ ssh user@<ip_target> "C:\CCTV\start_cctv.bat --snapshot"
 3.  Menu antarmuka Control Panel akan muncul dan mendeteksi status terbaru (`RUNNING` / `STOPPED`).
 4.  Pilih opsi **2** untuk _Start CCTV Server (Background)_ atau **3** untuk _Stop CCTV Server_ sesuai kebutuhan.
 
-Skrip menggunakan **Smart Multi-Backend Camera (MSMF + DSHOW)** dan mekanisme _graceful shutdown_ (file `stop.marker`). Ini 100% andal menanggulangi bug _force kill_ di Windows 11, memastikan _stream_ berhenti rapi, proses tidak nyangkut (zombie), dan lampu indikator kamera mati dengan sempurna.
+Skrip mendukung multi-backend kamera (MSMF dan DSHOW) serta penghentian terkontrol melalui berkas `stop.marker`, memastikan pelepasan driver kamera berlangsung bersih dan lampu indikator kamera mati saat proses dihentikan.
 
 ---
 
@@ -194,14 +194,14 @@ Karena Control Panel (`start_cctv.bat`) tidak bisa dijalankan secara interaktif 
 ### Cara A: Startup Folder (tanpa admin)
 
 ```powershell
-# Enable autostart — copy start_cctv.bat ke Startup Folder user
+# Aktifkan autostart: salin start_cctv.bat ke folder Startup pengguna
 $startup = [Environment]::GetFolderPath("Startup")
 Copy-Item "C:\CCTV\start_cctv.bat" "$startup\start_cctv.bat" -Force
 Write-Host "Autostart ENABLED: $startup\start_cctv.bat"
 ```
 
 ```powershell
-# Disable autostart — hapus dari Startup Folder
+# Nonaktifkan autostart: hapus dari folder Startup
 $startup = [Environment]::GetFolderPath("Startup")
 Remove-Item "$startup\start_cctv.bat" -ErrorAction SilentlyContinue
 Write-Host "Autostart DISABLED"
