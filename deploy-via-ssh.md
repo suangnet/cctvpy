@@ -1,6 +1,6 @@
 # Deploy & Remote Control CCTV via SSH (Windows → Windows)
 
-> **Catatan:** Ganti `user` dengan username akun target dan `<ip_target>` dengan alamat IP komputer target Anda (misal: IP LAN `192.168.1.50` atau IP Tailscale `100.x.y.z`).
+> **Catatan:** Ganti `user` dengan username akun target dan `<ip_target>` dengan alamat IP komputer target Anda (misal: IP LAN `192.168.8.100` atau IP Tailscale `100.x.y.z`).
 
 ---
 
