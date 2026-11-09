@@ -43,7 +43,27 @@ pip install flask opencv-python
 
 ## Langkah 4: Operasi Start / Stop / Status (via SSH)
 
-Skrip Control Panel (`start_cctv.bat`) sudah dirancang untuk berfungsi penuh melalui _interactive SSH session_.
+Skrip Control Panel (`start_cctv.bat`) dapat dioperasikan secara **interaktif** maupun langsung via **CLI flags satu baris** (sangat ideal untuk otomasi SSH):
+
+### Cara 1: Langsung via Parameter CLI (Direkomendasikan via SSH)
+
+Jalankan perintah langsung dari sesi SSH lokal tanpa harus membuka menu interaktif:
+
+```powershell
+# Cek status server
+ssh user@100.90.80.80 "C:\CCTV\start_cctv.bat --status"
+
+# Jalankan server secara tersembunyi di background
+ssh user@100.90.80.80 "C:\CCTV\start_cctv.bat --background"
+
+# Hentikan server secara graceful
+ssh user@100.90.80.80 "C:\CCTV\start_cctv.bat --stop"
+
+# Ambil foto snapshot langsung
+ssh user@100.90.80.80 "C:\CCTV\start_cctv.bat --snapshot"
+```
+
+### Cara 2: Menu Interaktif
 
 1.  Masuk melalui SSH ke komputer target:
     ```powershell
@@ -53,10 +73,10 @@ Skrip Control Panel (`start_cctv.bat`) sudah dirancang untuk berfungsi penuh mel
     ```cmd
     C:\CCTV\start_cctv.bat
     ```
-3.  Menu antarmuka Control Panel akan muncul dan mendeteksi _status_ terbaru (`RUNNING` / `STOPPED`).
-4.  Pilih opsi **2** untuk _Start CCTV Server (Background)_ atau **3** untuk _Stop CCTV Server_ sesuai kebutuhan Anda.
+3.  Menu antarmuka Control Panel akan muncul dan mendeteksi status terbaru (`RUNNING` / `STOPPED`).
+4.  Pilih opsi **2** untuk _Start CCTV Server (Background)_ atau **3** untuk _Stop CCTV Server_ sesuai kebutuhan.
 
-Skrip menggunakan **PowerShell Start-Process Hidden** dikombinasikan dengan mekanisme _graceful shutdown_ (file `stop.marker`). Ini 100% andal menanggulangi bug _force kill_ di Windows 11, memastikan _stream_ berhenti rapi, proses tidak nyangkut (zombie), dan lampu indikator kamera mati dengan sempurna.
+Skrip menggunakan **Smart Multi-Backend Camera (MSMF + DSHOW)** dan mekanisme _graceful shutdown_ (file `stop.marker`). Ini 100% andal menanggulangi bug _force kill_ di Windows 11, memastikan _stream_ berhenti rapi, proses tidak nyangkut (zombie), dan lampu indikator kamera mati dengan sempurna.
 
 ---
 
@@ -64,8 +84,8 @@ Skrip menggunakan **PowerShell Start-Process Hidden** dikombinasikan dengan meka
 
 Setelah server running di `100.90.80.80`, buka browser di komputer manapun yang terhubung Tailscale:
 
-| URL                                | Fungsi                             |
-| ---------------------------------- | ---------------------------------- |
+| URL                               | Fungsi                             |
+| --------------------------------- | ---------------------------------- |
 | `http://100.90.80.80:5000/`       | Halaman HTML dengan auto-reconnect |
 | `http://100.90.80.80:5000/stream` | Raw MJPEG stream                   |
 | `http://100.90.80.80:5000/status` | JSON status server                 |

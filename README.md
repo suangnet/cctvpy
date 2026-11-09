@@ -15,8 +15,9 @@ C:\CCTV\
 │       cctv.py         # Inti dari server CCTV Python
 │
 ├───log\
-│       cctv_server.log # Log aplikasi (auto-rotate, max 5MB x 2 backup)
-│       cctv_console.log # Output console saat mode background
+│       cctv_server.log      # Log aplikasi (auto-rotate, max 5MB x 2 backup)
+│       cctv_console_out.log # Output stdout saat mode background
+│       cctv_console_err.log # Output stderr saat mode background
 │
 └───tmp\
         cctv.pid        # (Terbuat otomatis, melacak ID proses)
@@ -26,11 +27,15 @@ C:\CCTV\
 ## Fitur Unggulan
 
 - **Live Streaming MJPEG**: Tonton langsung dari browser tanpa aplikasi tambahan.
+- **Smart Multi-Backend Camera**: Mendukung Windows Media Foundation (`MSMF`) dan DirectShow (`DSHOW`) dengan rilis driver instan untuk mencegah konflik *exclusive lock*.
+- **Auto-Probe Index Kamera**: Otomatis mendeteksi webcam aktif pada Index 0, 1, atau 2 (kebal terhadap jebakan kamera Windows Hello IR di laptop modern).
+- **Instant Status Detection**: Pengecekan status server super cepat (~15ms) via utilitas bawaan `tasklist` tanpa beban cold-start PowerShell.
 - **Smart Bandwidth Saving**: Stream _pause_ otomatis saat tab browser tidak aktif (pindah tab/minimize).
 - **Auto-Recovery & Reconnect**: Coba sambung ulang otomatis jika stream klien atau sistem kamera terputus.
 - **Low Resource Usage**: Menghemat CPU, sistem otomatis melakukan _skip encoding_ jika tidak ada penonton.
-- **Graceful Shutdown**: Menggunakan metode `stop.marker` agar proses kamera tertutup sempurna tanpa _glitch_ / proses zombie di Windows 11.
-- **Background Mode**: Berjalan tersembunyi via PowerShell (`Start-Process`), sangat ringan dan ideal untuk _autostart_.
+- **Graceful Shutdown**: Menggunakan metode `stop.marker` agar proses kamera tertutup sempurna tanpa _glitch_ / proses zombie di Windows 10 & 11.
+- **Background Mode**: Berjalan tersembunyi di balik layar, sangat ringan dan ideal untuk _autostart_.
+- **CLI & Remote SSH Ready**: Mendukung eksekusi berparameter (`--start`, `--background`, `--stop`, `--status`, `--snapshot`) tanpa wajib membuka menu interaktif.
 - **Snapshot & Status API**: Ambil foto (JPEG) atau pantau status server via REST API.
 - **Log Rotation**: Mencegah log file membengkak dan memenuhi ruang penyimpanan disk.
 
@@ -46,9 +51,10 @@ C:\CCTV\
 
 ## Persiapan Awal
 
-1. **Install Python**: Unduh Python (versi 3.9+) dari [python.org](https://www.python.org/downloads/) dan pasang. **Sangat Penting:** Wajib centang **"Add Python to PATH"** saat instalasi!
-2. **Install Tailscale**: Login dengan akun yang sama di PC Server dan perangkat pemantau. Catat IP Tailscale milik PC Server.
-3. **Power Settings**: Ubah opsi _Lid closed_ ke **Do nothing** (di menu _Power Options_) agar laptop tidak _sleep_ saat layarnya ditutup.
+1. **Install Python**: Unduh Python (versi 3.9+) dari [python.org](https://www.python.org/downloads/) dan pasang. Disarankan mencentang **"Add Python to PATH"** saat instalasi (skrip juga dilengkapi *auto-discovery* jika belum masuk PATH).
+2. **Izin Kamera (Khusus Windows 10 & 11)**: Pastikan akses kamera untuk desktop aktif di **Settings > Privacy & security > Camera > Let desktop apps access your camera** (set ke **On**).
+3. **Install Tailscale**: Login dengan akun yang sama di PC Server dan perangkat pemantau. Catat IP Tailscale milik PC Server.
+4. **Power Settings**: Ubah opsi _Lid closed_ ke **Do nothing** (di menu _Power Options_) agar laptop tidak _sleep_ saat layarnya ditutup.
 
 ## Instalasi & Penggunaan
 
@@ -88,7 +94,15 @@ Klik ganda **`start_cctv.bat`** untuk membuka menu interaktif berikut:
 ```
 
 - **Autostart (Opsi 5):** Server otomatis menyala secara tersembunyi di _background_ setiap kali PC dihidupkan (tanpa butuh akses Admin).
-- **Remote SSH:** _Control Panel_ ini 100% mendukung eksekusi jarak jauh (SSH) tanpa masalah _force-kill_. Detail baca `deploy-via-ssh.md`.
+- **Remote SSH / CLI Flags:** Anda juga bisa menjalankan fungsi langsung tanpa masuk ke menu interaktif:
+  ```cmd
+  start_cctv.bat --start        # Jalankan di jendela baru
+  start_cctv.bat --background   # Jalankan tersembunyi di background
+  start_cctv.bat --status       # Cek status server (RUNNING / STOPPED)
+  start_cctv.bat --stop         # Hentikan server secara graceful
+  start_cctv.bat --snapshot     # Ambil foto seketika ke folder log
+  ```
+- Detail operasional remote via SSH baca `deploy-via-ssh.md`.
 
 ### 3. Konfigurasi Kustom (Opsional)
 
