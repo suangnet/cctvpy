@@ -74,29 +74,68 @@ last_frame_time = 0.0  # timestamp of last successful frame
 camera = None  # cv2.VideoCapture, initialized in open_camera()
 
 
+def _try_open_cam(index, width, height, fps):
+    """Attempt opening a camera index across Windows backends (DSHOW then MSMF/default)."""
+    backends = (
+        [cv2.CAP_DSHOW, cv2.CAP_MSMF]
+        if sys.platform.startswith("win")
+        else [cv2.CAP_ANY]
+    )
+    for backend in backends:
+        cam = cv2.VideoCapture(index, backend)
+        if cam.isOpened():
+            cam.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            cam.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            cam.set(cv2.CAP_PROP_FPS, fps)
+            cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            # Verify the camera can actually deliver a readable frame (avoids Windows Hello IR sensors)
+            ret, _ = cam.read()
+            if ret:
+                return cam
+            cam.release()
+        else:
+            cam.release()
+    return None
+
+
 def open_camera(cfg):
-    """Open (or re-open) the camera with configured settings."""
+    """Open (or re-open) the camera with configured settings and auto-fallback."""
     global camera, camera_ok
     if camera is not None:
         try:
             camera.release()
         except Exception:
             pass
-    cam = cv2.VideoCapture(cfg.camera)
-    if cam.isOpened():
-        cam.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.width)
-        cam.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.height)
-        cam.set(cv2.CAP_PROP_FPS, cfg.fps)
-        # ponytail: CAP_PROP_BUFFERSIZE may be unsupported on some drivers; harmless no-op
-        cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        camera = None
+
+    # First attempt the requested camera index
+    cam = _try_open_cam(cfg.camera, cfg.width, cfg.height, cfg.fps)
+
+    # If default index 0 failed on Windows, auto-probe index 1-2 (common on dual/IR camera laptops)
+    if cam is None and cfg.camera == DEFAULT_CAMERA:
+        for alt_idx in (1, 2):
+            logger.info("Probing alternate camera index %d...", alt_idx)
+            cam = _try_open_cam(alt_idx, cfg.width, cfg.height, cfg.fps)
+            if cam is not None:
+                logger.info("Camera auto-detected on index %d instead of 0", alt_idx)
+                cfg.camera = alt_idx
+                break
+
+    if cam is not None:
         camera = cam
         camera_ok = True
-        logger.info("Camera %d opened (%dx%d)", cfg.camera, cfg.width, cfg.height)
+        logger.info(
+            "Camera %d opened successfully (%dx%d)", cfg.camera, cfg.width, cfg.height
+        )
         return True
     else:
-        camera = cam
+        camera = None
         camera_ok = False
-        logger.error("Failed to open camera %d", cfg.camera)
+        logger.error(
+            "Failed to open camera %d. Verify connection and Windows camera privacy "
+            "(Settings > Privacy & security > Camera > Let desktop apps access your camera).",
+            cfg.camera,
+        )
         return False
 
 
@@ -361,6 +400,7 @@ class ThreadedWSGIServer(ThreadingMixIn, WSGIServer):
     """Handle each request in a new thread — required for MJPEG streaming."""
 
     daemon_threads = True
+    allow_reuse_address = True
 
 
 # ==========================================
@@ -370,14 +410,19 @@ if __name__ == "__main__":
     cfg = parse_args()
     app.config["cctv_cfg"] = cfg
 
-    # Open camera before writing PID — if it fails, PID is still written
-    # so the bat script can manage the process, but we log the error.
-    open_camera(cfg)
-
-    # Write PID only after we're actually starting
+    # Write PID immediately so start_cctv.bat status check instantly detects running state
     os.makedirs("tmp", exist_ok=True)
     with open(os.path.join("tmp", "cctv.pid"), "w") as f:
         f.write(str(os.getpid()))
+
+    # Remove any stale stop marker left by previously killed processes
+    try:
+        os.remove(os.path.join("tmp", "stop.marker"))
+    except OSError:
+        pass
+
+    # Open camera
+    open_camera(cfg)
 
     # Start capture thread
     t = threading.Thread(target=capture_thread, args=(cfg,), daemon=True)
@@ -390,24 +435,38 @@ if __name__ == "__main__":
         cfg.quality,
     )
 
-    import _thread
-    def check_stop_marker():
-        while True:
-            if os.path.exists(os.path.join("tmp", "stop.marker")):
-                logger.info("Stop marker detected. Triggering shutdown...")
-                _thread.interrupt_main()
-                break
-            time.sleep(1)
-    
-    threading.Thread(target=check_stop_marker, daemon=True).start()
-
     # Use stdlib threaded WSGI server instead of Flask dev server
     # ponytail: if concurrent viewers > ~10, consider waitress or gunicorn
-    server = make_server("0.0.0.0", cfg.port, app, server_class=ThreadedWSGIServer)
+    try:
+        server = make_server("0.0.0.0", cfg.port, app, server_class=ThreadedWSGIServer)
+    except OSError as e:
+        logger.error(
+            "Failed to bind port %d: %s. Port may be occupied by another process.",
+            cfg.port,
+            e,
+        )
+        cleanup()
+        sys.exit(1)
+
+    def check_stop_marker(srv):
+        while True:
+            marker = os.path.join("tmp", "stop.marker")
+            if os.path.exists(marker):
+                logger.info("Stop marker detected. Shutting down server...")
+                try:
+                    os.remove(marker)
+                except OSError:
+                    pass
+                srv.shutdown()
+                break
+            time.sleep(0.5)
+
+    threading.Thread(target=check_stop_marker, args=(server,), daemon=True).start()
+
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt, shutting down")
     finally:
-        server.shutdown()
+        server.server_close()
         cleanup()
