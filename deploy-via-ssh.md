@@ -1,6 +1,6 @@
 # Deploy & Remote Control CCTV via SSH (Windows → Windows)
 
-Target: `user@100.90.80.80` (via Tailscale)
+> **Catatan:** Ganti `user` dengan username akun target dan `<ip_target>` dengan alamat IP komputer target Anda (misal: IP LAN `192.168.1.50` atau IP Tailscale `100.x.y.z`).
 
 ---
 
@@ -25,7 +25,7 @@ Tekan Enter untuk lokasi default (`~/.ssh/id_ed25519`) dan passphrase (bisa diko
 **Cara 1 (Otomatis dari Komputer Lokal via SSH/PowerShell):**
 
 ```powershell
-Get-Content ~/.ssh/id_ed25519.pub | ssh user@100.90.80.80 "powershell -Command `"New-Item -ItemType Directory -Force -Path `"`$HOME\.ssh`" | Out-Null; Add-Content -Path `"`$HOME\.ssh\authorized_keys`" -Value `$input`""
+Get-Content ~/.ssh/id_ed25519.pub | ssh user@<ip_target> "powershell -Command `"New-Item -ItemType Directory -Force -Path `"`$HOME\.ssh`" | Out-Null; Add-Content -Path `"`$HOME\.ssh\authorized_keys`" -Value `$input`""
 ```
 
 **Cara 2 (Manual Langsung di Komputer Windows 11 Target):**
@@ -106,10 +106,10 @@ Jalankan di **PowerShell lokal** (komputer CCTV sumber):
 ```powershell
 # PENTING: Pastikan folder target sudah ada dulu
 # (Default shell OpenSSH Windows adalah cmd.exe, gunakan mkdir bawaan cmd)
-ssh user@100.90.80.80 "if not exist C:\CCTV mkdir C:\CCTV"
+ssh user@<ip_target> "if not exist C:\CCTV mkdir C:\CCTV"
 
 # Copy HANYA folder bin dan start_cctv.bat
-scp -r C:\CCTV\bin C:\CCTV\start_cctv.bat user@100.90.80.80:C:/CCTV/
+scp -r C:\CCTV\bin C:\CCTV\start_cctv.bat user@<ip_target>:C:/CCTV/
 ```
 
 > **Kenapa hanya file tertentu?** Folder lain seperti `tmp` dan `log` akan dibuat secara otomatis oleh script, sedangkan `README.md` tidak dibutuhkan di komputer target.
@@ -121,7 +121,7 @@ scp -r C:\CCTV\bin C:\CCTV\start_cctv.bat user@100.90.80.80:C:/CCTV/
 ## Langkah 2: Masuk via SSH
 
 ```powershell
-ssh user@100.90.80.80
+ssh user@<ip_target>
 ```
 
 ---
@@ -146,23 +146,23 @@ Jalankan perintah langsung dari sesi SSH lokal tanpa harus membuka menu interakt
 
 ```powershell
 # Cek status server
-ssh user@100.90.80.80 "C:\CCTV\start_cctv.bat --status"
+ssh user@<ip_target> "C:\CCTV\start_cctv.bat --status"
 
 # Jalankan server secara tersembunyi di background
-ssh user@100.90.80.80 "C:\CCTV\start_cctv.bat --background"
+ssh user@<ip_target> "C:\CCTV\start_cctv.bat --background"
 
 # Hentikan server secara graceful
-ssh user@100.90.80.80 "C:\CCTV\start_cctv.bat --stop"
+ssh user@<ip_target> "C:\CCTV\start_cctv.bat --stop"
 
 # Ambil foto snapshot langsung
-ssh user@100.90.80.80 "C:\CCTV\start_cctv.bat --snapshot"
+ssh user@<ip_target> "C:\CCTV\start_cctv.bat --snapshot"
 ```
 
 ### Cara 2: Menu Interaktif
 
 1.  Masuk melalui SSH ke komputer target:
     ```powershell
-    ssh user@100.90.80.80
+    ssh user@<ip_target>
     ```
 2.  Eksekusi file Control Panel secara langsung:
     ```cmd
@@ -177,13 +177,13 @@ Skrip menggunakan **Smart Multi-Backend Camera (MSMF + DSHOW)** dan mekanisme _g
 
 ## Akses Live View dari Browser
 
-Setelah server running di `100.90.80.80`, buka browser di komputer manapun yang terhubung Tailscale:
+Setelah server running di `<ip_target>`, buka browser di komputer manapun yang berada dalam jaringan yang sama / terhubung Tailscale:
 
-| URL                               | Fungsi                             |
-| --------------------------------- | ---------------------------------- |
-| `http://100.90.80.80:5000/`       | Halaman HTML dengan auto-reconnect |
-| `http://100.90.80.80:5000/stream` | Raw MJPEG stream                   |
-| `http://100.90.80.80:5000/status` | JSON status server                 |
+| URL                              | Fungsi                             |
+| -------------------------------- | ---------------------------------- |
+| `http://<ip_target>:5000/`       | Halaman HTML dengan auto-reconnect |
+| `http://<ip_target>:5000/stream` | Raw MJPEG stream                   |
+| `http://<ip_target>:5000/status` | JSON status server                 |
 
 ---
 
