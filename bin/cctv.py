@@ -61,6 +61,7 @@ app = Flask(__name__)
 latest_frame = None  # JPEG bytes
 frame_lock = threading.Lock()
 frame_event = threading.Event()  # set when a new frame is available
+snapshot_event = threading.Event()  # trigger capture even when viewers == 0
 client_count = 0  # number of active streaming generators
 client_lock = threading.Lock()
 camera_ok = True  # flag: is camera currently readable?
@@ -228,7 +229,7 @@ def capture_thread(cfg):
         # --- Skip encoding when nobody is watching ---
         with client_lock:
             viewers = client_count
-        if viewers == 0:
+        if viewers == 0 and not snapshot_event.is_set() and latest_frame is not None:
             continue
 
         # --- Timestamp overlay (cached per-second) ---
@@ -268,6 +269,7 @@ def capture_thread(cfg):
         if ret:
             with frame_lock:
                 latest_frame = buffer.tobytes()
+            snapshot_event.clear()
             frame_event.set()
 
 
@@ -362,6 +364,8 @@ def video_feed():
 @app.route("/snapshot")
 def snapshot():
     """Return a single JPEG snapshot from the latest frame."""
+    snapshot_event.set()
+    frame_event.wait(timeout=1.0)
     with frame_lock:
         frame_bytes = latest_frame
 

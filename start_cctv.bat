@@ -14,6 +14,8 @@ if not exist "tmp" mkdir tmp
 if not exist "log" mkdir log
 
 :: Handle CLI arguments (allows non-interactive SSH automation)
+set "IS_CLI=0"
+if not "%~1"=="" set "IS_CLI=1"
 if /i "%1"=="--autostart" goto :auto_start
 if /i "%1"=="--start" goto :cli_start
 if /i "%1"=="--background" goto :cli_minimize
@@ -75,7 +77,7 @@ if "%choice%"=="6" goto :disable_autostart
 if "%choice%"=="7" goto :log
 if "%choice%"=="8" goto :exit
 if "%choice%"=="0" (
-    timeout /t 1 >nul
+    ping 127.0.0.1 -n 2 >nul 2>&1
     goto :menu
 )
 goto :menu
@@ -96,7 +98,7 @@ if "!SERVER_RUNNING!"=="1" (
 :cli_start
 call :check_running
 if "!SERVER_RUNNING!"=="1" (
-    echo CCTV Server is already running.
+    echo CCTV Server is already running [PID: !PID!].
     exit /b 0
 )
 call :check_deps
@@ -104,20 +106,32 @@ if "!DEPS_OK!"=="0" exit /b 1
 if exist tmp\stop.marker del tmp\stop.marker >nul 2>&1
 start "CCTV_Server_Running" cmd /k ""!PYTHON_EXE!" bin\cctv.py"
 call :wait_start
-exit /b 0
+if "!SERVER_RUNNING!"=="1" (
+    echo CCTV Server started [PID: !PID!].
+    exit /b 0
+) else (
+    echo Failed to start CCTV Server.
+    exit /b 1
+)
 
 :cli_minimize
 call :check_running
 if "!SERVER_RUNNING!"=="1" (
-    echo CCTV Server is already running.
+    echo CCTV Server is already running [PID: !PID!].
     exit /b 0
 )
 call :check_deps
 if "!DEPS_OK!"=="0" exit /b 1
 if exist tmp\stop.marker del tmp\stop.marker >nul 2>&1
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process '!PYTHON_EXE!' -ArgumentList '-u bin\cctv.py' -WorkingDirectory '!PROJ_DIR!' -RedirectStandardOutput '!PROJ_DIR!\log\cctv_console_out.log' -RedirectStandardError '!PROJ_DIR!\log\cctv_console_err.log' -WindowStyle Hidden"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine = '\"!PYTHON_EXE!\" -u bin\cctv.py'; CurrentDirectory = '!PROJ_DIR!'}" >nul 2>&1
 call :wait_start
-exit /b 0
+if "!SERVER_RUNNING!"=="1" (
+    echo CCTV Server started in background [PID: !PID!].
+    exit /b 0
+) else (
+    echo Failed to start CCTV Server. Check log\cctv_console_err.log.
+    exit /b 1
+)
 
 :cli_stop
 call :stop_internal
@@ -137,7 +151,7 @@ call :check_running
 if "!SERVER_RUNNING!"=="1" (
     echo.
     echo Server is already running! Please stop it first.
-    timeout /t 2 >nul
+    ping 127.0.0.1 -n 3 >nul 2>&1
     goto :menu
 )
 call :check_deps
@@ -154,7 +168,7 @@ call :check_running
 if "!SERVER_RUNNING!"=="1" (
     echo.
     echo Server is already running! Please stop it first.
-    timeout /t 2 >nul
+    ping 127.0.0.1 -n 3 >nul 2>&1
     goto :menu
 )
 call :check_deps
@@ -162,14 +176,14 @@ if "!DEPS_OK!"=="0" goto :menu
 
 if exist tmp\stop.marker del tmp\stop.marker >nul 2>&1
 echo Starting server completely hidden in the background...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process '!PYTHON_EXE!' -ArgumentList '-u bin\cctv.py' -WorkingDirectory '!PROJ_DIR!' -RedirectStandardOutput '!PROJ_DIR!\log\cctv_console_out.log' -RedirectStandardError '!PROJ_DIR!\log\cctv_console_err.log' -WindowStyle Hidden"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine = '\"!PYTHON_EXE!\" -u bin\cctv.py'; CurrentDirectory = '!PROJ_DIR!'}" >nul 2>&1
 call :wait_start
 goto :menu
 
 :wait_start
 set /a WAIT_TRIES=0
 :wait_start_loop
-timeout /t 1 >nul
+ping 127.0.0.1 -n 2 >nul 2>&1
 call :check_running
 if "!SERVER_RUNNING!"=="1" goto :eof
 set /a WAIT_TRIES+=1
@@ -188,7 +202,7 @@ echo Stopping CCTV Server...
 :: Wait up to 4 seconds for graceful shutdown
 set /a STOP_TRIES=0
 :wait_stop_loop
-timeout /t 1 >nul
+ping 127.0.0.1 -n 2 >nul 2>&1
 call :check_running
 if "!SERVER_RUNNING!"=="0" goto :stop_done
 set /a STOP_TRIES+=1
@@ -206,7 +220,7 @@ taskkill /F /FI "WINDOWTITLE eq CCTV_Server_Running*" /T >nul 2>&1
 :stop_done
 if exist tmp\stop.marker del tmp\stop.marker >nul 2>&1
 echo Server stopped.
-timeout /t 1 >nul
+ping 127.0.0.1 -n 2 >nul 2>&1
 goto :eof
 
 :snapshot
@@ -214,12 +228,12 @@ call :check_running
 if "!SERVER_RUNNING!"=="0" (
     echo.
     echo Server is not running! Please start it first to take a snapshot.
-    timeout /t 2 >nul
+    ping 127.0.0.1 -n 3 >nul 2>&1
     goto :menu
 )
 echo.
 call :do_snapshot
-timeout /t 2 >nul
+ping 127.0.0.1 -n 3 >nul 2>&1
 goto :menu
 
 :do_snapshot
@@ -238,7 +252,7 @@ if !errorlevel! equ 0 (
 
 if exist "!SNAPSHOT_FILE!" (
     echo Snapshot saved to !SNAPSHOT_FILE!
-    start "" "!SNAPSHOT_FILE!"
+    if not "!IS_CLI!"=="1" start "" "!SNAPSHOT_FILE!"
 ) else (
     echo Failed to take snapshot. Check server logs.
 )
@@ -250,7 +264,7 @@ if exist log\cctv_server.log (
 ) else (
     echo.
     echo No logs found! Start the server in Hidden mode to generate logs.
-    timeout /t 2 >nul
+    ping 127.0.0.1 -n 3 >nul 2>&1
 )
 goto :menu
 
@@ -260,7 +274,7 @@ set "LEGACY_AUTOSTART_BAT=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startu
 if exist "!AUTOSTART_LNK!" (
     echo.
     echo Autostart is already ENABLED.
-    timeout /t 2 >nul
+    ping 127.0.0.1 -n 3 >nul 2>&1
     goto :menu
 )
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('!AUTOSTART_LNK!'); $sc.TargetPath = '!PROJ_DIR!\start_cctv.bat'; $sc.Arguments = '--autostart'; $sc.WorkingDirectory = '!PROJ_DIR!'; $sc.WindowStyle = 7; $sc.Save()" >nul 2>&1
@@ -272,7 +286,7 @@ if exist "!AUTOSTART_LNK!" (
     echo.
     echo Failed to enable autostart. Check folder permissions.
 )
-timeout /t 2 >nul
+ping 127.0.0.1 -n 3 >nul 2>&1
 goto :menu
 
 :disable_autostart
@@ -294,7 +308,7 @@ if "!REMOVED!"=="1" (
     echo.
     echo Autostart is already DISABLED.
 )
-timeout /t 2 >nul
+ping 127.0.0.1 -n 3 >nul 2>&1
 goto :menu
 
 :auto_start
@@ -310,7 +324,7 @@ if exist tmp\stop.marker del tmp\stop.marker >nul 2>&1
 call :resolve_python
 if not defined PYTHON_EXE exit /b
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process '!PYTHON_EXE!' -ArgumentList '-u bin\cctv.py' -WorkingDirectory '!PROJ_DIR!' -RedirectStandardOutput '!PROJ_DIR!\log\cctv_console_out.log' -RedirectStandardError '!PROJ_DIR!\log\cctv_console_err.log' -WindowStyle Hidden"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine = '\"!PYTHON_EXE!\" -u bin\cctv.py'; CurrentDirectory = '!PROJ_DIR!'}" >nul 2>&1
 exit /b
 
 :exit
@@ -368,7 +382,7 @@ if not defined PYTHON_EXE (
     echo [ERROR] Python not found or points to Microsoft Store alias.
     echo Please install Python 3.9+ and ensure 'Add Python to PATH' is checked.
     set DEPS_OK=0
-    pause
+    if not "!IS_CLI!"=="1" pause
     goto :eof
 )
 "%PYTHON_EXE%" -c "import flask, cv2" >nul 2>&1
@@ -377,7 +391,7 @@ if !errorlevel! neq 0 (
     echo [ERROR] Required dependencies are missing!
     echo Please run: pip install flask opencv-python
     set DEPS_OK=0
-    pause
+    if not "!IS_CLI!"=="1" pause
     goto :eof
 )
 goto :eof
