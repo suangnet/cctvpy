@@ -23,6 +23,8 @@ if /i "%1"=="--minimize" goto :cli_minimize
 if /i "%1"=="--stop" goto :cli_stop
 if /i "%1"=="--status" goto :cli_status
 if /i "%1"=="--snapshot" goto :cli_snapshot
+if /i "%1"=="--enable-autostart" goto :cli_enable_autostart
+if /i "%1"=="--disable-autostart" goto :cli_disable_autostart
 
 echo "%~dp0" | find /I "Startup" >nul
 if %errorlevel% equ 0 goto :auto_start
@@ -123,7 +125,8 @@ if "!SERVER_RUNNING!"=="1" (
 call :check_deps
 if "!DEPS_OK!"=="0" exit /b 1
 if exist tmp\stop.marker del tmp\stop.marker >nul 2>&1
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine = '\"!PYTHON_EXE!\" -u bin\cctv.py'; CurrentDirectory = '!PROJ_DIR!'}" >nul 2>&1
+:: ponytail: uses pythonw/WMI; if running as Windows Service across all sessions is needed, wrap with NSSM or WinSW.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ShowWindow = [UInt16]0}; Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine = '\"!PYTHON_RUN_EXE!\" -u bin\cctv.py'; CurrentDirectory = '!PROJ_DIR!'; ProcessStartupInformation = $s}" >nul 2>&1
 call :wait_start
 if "!SERVER_RUNNING!"=="1" (
     echo CCTV Server started in background [PID: !PID!].
@@ -132,6 +135,14 @@ if "!SERVER_RUNNING!"=="1" (
     echo Failed to start CCTV Server. Check log\cctv_console_err.log.
     exit /b 1
 )
+
+:cli_enable_autostart
+call :do_enable_autostart
+exit /b !AUTOSTART_RESULT!
+
+:cli_disable_autostart
+call :do_disable_autostart
+exit /b 0
 
 :cli_stop
 call :stop_internal
@@ -176,7 +187,7 @@ if "!DEPS_OK!"=="0" goto :menu
 
 if exist tmp\stop.marker del tmp\stop.marker >nul 2>&1
 echo Starting server completely hidden in the background...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine = '\"!PYTHON_EXE!\" -u bin\cctv.py'; CurrentDirectory = '!PROJ_DIR!'}" >nul 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ShowWindow = [UInt16]0}; Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine = '\"!PYTHON_RUN_EXE!\" -u bin\cctv.py'; CurrentDirectory = '!PROJ_DIR!'; ProcessStartupInformation = $s}" >nul 2>&1
 call :wait_start
 goto :menu
 
@@ -269,27 +280,45 @@ if exist log\cctv_server.log (
 goto :menu
 
 :enable_autostart
+call :do_enable_autostart
+ping 127.0.0.1 -n 3 >nul 2>&1
+goto :menu
+
+:disable_autostart
+call :do_disable_autostart
+ping 127.0.0.1 -n 3 >nul 2>&1
+goto :menu
+
+:do_enable_autostart
 set "AUTOSTART_LNK=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\CCTV_Autostart.lnk"
 set "LEGACY_AUTOSTART_BAT=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\start_cctv.bat"
 if exist "!AUTOSTART_LNK!" (
     echo.
     echo Autostart is already ENABLED.
-    ping 127.0.0.1 -n 3 >nul 2>&1
-    goto :menu
+    set AUTOSTART_RESULT=0
+    goto :eof
 )
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('!AUTOSTART_LNK!'); $sc.TargetPath = '!PROJ_DIR!\start_cctv.bat'; $sc.Arguments = '--autostart'; $sc.WorkingDirectory = '!PROJ_DIR!'; $sc.WindowStyle = 7; $sc.Save()" >nul 2>&1
+call :resolve_python
+if not defined PYTHON_EXE (
+    echo.
+    echo [ERROR] Python not found. Cannot configure autostart.
+    set AUTOSTART_RESULT=1
+    goto :eof
+)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('!AUTOSTART_LNK!'); $sc.TargetPath = '!PYTHON_RUN_EXE!'; $sc.Arguments = 'bin\cctv.py'; $sc.WorkingDirectory = '!PROJ_DIR!'; $sc.WindowStyle = 7; $sc.Save()" >nul 2>&1
 if exist "!AUTOSTART_LNK!" (
     if exist "!LEGACY_AUTOSTART_BAT!" del "!LEGACY_AUTOSTART_BAT!" >nul 2>&1
     echo.
-    echo Autostart ENABLED. Server will start hidden on next Windows login.
+    echo Autostart ENABLED. Server will start silently in background on next Windows login.
+    set AUTOSTART_RESULT=0
 ) else (
     echo.
     echo Failed to enable autostart. Check folder permissions.
+    set AUTOSTART_RESULT=1
 )
-ping 127.0.0.1 -n 3 >nul 2>&1
-goto :menu
+goto :eof
 
-:disable_autostart
+:do_disable_autostart
 set "AUTOSTART_LNK=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\CCTV_Autostart.lnk"
 set "LEGACY_AUTOSTART_BAT=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\start_cctv.bat"
 set REMOVED=0
@@ -308,8 +337,7 @@ if "!REMOVED!"=="1" (
     echo.
     echo Autostart is already DISABLED.
 )
-ping 127.0.0.1 -n 3 >nul 2>&1
-goto :menu
+goto :eof
 
 :auto_start
 :: Executed ONLY when triggered by Windows Startup
@@ -324,7 +352,7 @@ if exist tmp\stop.marker del tmp\stop.marker >nul 2>&1
 call :resolve_python
 if not defined PYTHON_EXE exit /b
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine = '\"!PYTHON_EXE!\" -u bin\cctv.py'; CurrentDirectory = '!PROJ_DIR!'}" >nul 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ShowWindow = [UInt16]0}; Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine = '\"!PYTHON_RUN_EXE!\" -u bin\cctv.py'; CurrentDirectory = '!PROJ_DIR!'; ProcessStartupInformation = $s}" >nul 2>&1
 exit /b
 
 :exit
@@ -336,6 +364,7 @@ exit /b
 :: ==========================================
 :resolve_python
 set "PYTHON_EXE="
+set "PYTHONW_EXE="
 :: 1. Search PATH for valid python.exe (excluding broken WindowsApps alias)
 for /f "delims=" %%I in ('where.exe python.exe 2^>nul') do (
     if not defined PYTHON_EXE (
@@ -367,6 +396,22 @@ if not defined PYTHON_EXE (
             if !errorlevel! equ 0 set "PYTHON_EXE=%%D\python.exe"
         )
     )
+)
+
+:: Resolve pythonw.exe for windowless background execution
+if defined PYTHON_EXE (
+    set "CANDIDATE_W=!PYTHON_EXE:python.exe=pythonw.exe!"
+    if exist "!CANDIDATE_W!" set "PYTHONW_EXE=!CANDIDATE_W!"
+)
+if not defined PYTHONW_EXE (
+    for /f "delims=" %%I in ('where.exe pythonw.exe 2^>nul') do (
+        if not defined PYTHONW_EXE set "PYTHONW_EXE=%%I"
+    )
+)
+if defined PYTHONW_EXE (
+    set "PYTHON_RUN_EXE=!PYTHONW_EXE!"
+) else (
+    set "PYTHON_RUN_EXE=!PYTHON_EXE!"
 )
 goto :eof
 

@@ -189,36 +189,32 @@ Setelah server running di `<ip_target>`, buka browser di komputer manapun yang b
 
 ## Autostart saat Boot (opsional, jalankan dari SSH)
 
-Karena Control Panel (`start_cctv.bat`) tidak bisa dijalankan secara interaktif via SSH, gunakan salah satu cara berikut dari PowerShell SSH session:
+Server berjalan di latar belakang (background) tanpa jendela terminal menggunakan `pythonw.exe`. Pilih salah satu metode autostart berikut:
 
-### Cara A: Startup Folder (tanpa admin)
+### Cara A: CLI Flag Otomatis (Direkomendasikan via SSH, tanpa admin)
+
+Jalankan langsung melalui SSH:
 
 ```powershell
-# Aktifkan autostart: salin start_cctv.bat ke folder Startup pengguna
-$startup = [Environment]::GetFolderPath("Startup")
-Copy-Item "C:\CCTV\start_cctv.bat" "$startup\start_cctv.bat" -Force
-Write-Host "Autostart ENABLED: $startup\start_cctv.bat"
+# Aktifkan autostart latar belakang (membuat shortcut ke pythonw.exe di folder Startup pengguna)
+ssh user@<ip_target> "C:\CCTV\start_cctv.bat --enable-autostart"
+
+# Nonaktifkan autostart
+ssh user@<ip_target> "C:\CCTV\start_cctv.bat --disable-autostart"
 ```
 
-```powershell
-# Nonaktifkan autostart: hapus dari folder Startup
-$startup = [Environment]::GetFolderPath("Startup")
-Remove-Item "$startup\start_cctv.bat" -ErrorAction SilentlyContinue
-Write-Host "Autostart DISABLED"
-```
+> Menyala otomatis di background setiap kali user login ke Windows (tanpa jendela terminal). Ekuivalen dengan opsi **5/6** di Control Panel.
 
-> Menyala setelah user login. Ekuivalen dengan opsi **6/7** di Control Panel.
-
-### Cara B: Scheduled Task (menyala sebelum login, butuh admin)
+### Cara B: Scheduled Task (butuh admin)
 
 ```powershell
-# Enable
+# Enable (gunakan pythonw dan trigger AtLogOn agar memiliki akses driver webcam pengguna)
 $action = New-ScheduledTaskAction `
-  -Execute "python" `
+  -Execute "pythonw" `
   -Argument "bin\cctv.py" `
   -WorkingDirectory "C:\CCTV"
 
-$trigger = New-ScheduledTaskTrigger -AtStartup
+$trigger = New-ScheduledTaskTrigger -AtLogOn
 
 $settings = New-ScheduledTaskSettingsSet `
   -ExecutionTimeLimit (New-TimeSpan -Hours 0) `
@@ -229,7 +225,6 @@ Register-ScheduledTask `
   -TaskName "CCTV_Server" `
   -Action $action `
   -Trigger $trigger `
-  -Settings $settings `
   -RunLevel Highest `
   -Force
 

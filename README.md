@@ -89,11 +89,13 @@ Klik ganda berkas [`start_cctv.bat`](start_cctv.bat) untuk membuka menu interakt
 Perintah dapat dijalankan langsung tanpa menu:
 
 ```cmd
-start_cctv.bat --start        # Jalankan di jendela terminal baru
-start_cctv.bat --background   # Jalankan tersembunyi di latar belakang
-start_cctv.bat --status       # Cek status proses server
-start_cctv.bat --snapshot     # Ambil foto seketika ke direktori log
-start_cctv.bat --stop         # Hentikan proses server secara aman
+start_cctv.bat --start               # Jalankan di jendela terminal baru
+start_cctv.bat --background          # Jalankan tersembunyi di latar belakang
+start_cctv.bat --status              # Cek status proses server
+start_cctv.bat --snapshot            # Ambil foto seketika ke direktori log
+start_cctv.bat --stop                # Hentikan proses server secara aman
+start_cctv.bat --enable-autostart    # Aktifkan autostart latar belakang (saat login)
+start_cctv.bat --disable-autostart   # Nonaktifkan autostart latar belakang
 ```
 
 Panduan lengkap instalasi tanpa monitor (headless) dan pengaturan SSH key tersedia di [`deploy-via-ssh.md`](deploy-via-ssh.md).
