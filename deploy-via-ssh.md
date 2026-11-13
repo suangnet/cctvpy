@@ -1,134 +1,127 @@
-# Deploy & Remote Control CCTV via SSH (Windows → Windows)
+# Deploy & Remote Control CCTV via SSH (Windows to Windows)
 
-> **Catatan:** Ganti `user` dengan username akun target dan `<ip_target>` dengan alamat IP komputer target Anda (misal: IP LAN `192.168.8.100` atau IP Tailscale `100.x.y.z`).
+> **Note:** Replace `user` with your target account username and `<target_ip>` with your target machine IP address (e.g., LAN IP `192.168.8.100` or Tailscale IP `100.x.y.z`).
 
 ---
 
-## Langkah 0: Registrasi SSH Key (Login Tanpa Password)
+## Step 0: Register SSH Key (Passwordless Login)
 
-### 1. Buat SSH Key di Komputer Lokal (jika belum ada)
+### 1. Generate SSH Key on Local Machine (if not already present)
 
-Jalankan di terminal lokal:
+Run in local PowerShell:
 
 ```powershell
 ssh-keygen -t ed25519
 ```
 
-Tekan Enter untuk lokasi default (`~/.ssh/id_ed25519`) dan passphrase (bisa dikosongkan).
+Press Enter to accept the default file location (`~/.ssh/id_ed25519`) and passphrase (can be empty).
 
 ---
 
-### 2. Daftarkan Public Key ke Windows 11 Target
+### 2. Add Public Key to Target Windows 11
 
-#### Kasus A: User Biasa (Non-Administrator)
+#### Case A: Standard User (Non-Administrator)
 
-**Cara 1 (Otomatis dari Komputer Lokal via SSH/PowerShell):**
+**Method 1 (Automatic from local terminal via SSH/PowerShell):**
 
 ```powershell
-Get-Content ~/.ssh/id_ed25519.pub | ssh user@<ip_target> "powershell -Command `"New-Item -ItemType Directory -Force -Path `"`$HOME\.ssh`" | Out-Null; Add-Content -Path `"`$HOME\.ssh\authorized_keys`" -Value `$input`""
+Get-Content ~/.ssh/id_ed25519.pub | ssh user@<target_ip> "powershell -Command `"New-Item -ItemType Directory -Force -Path `"`$HOME\.ssh`" | Out-Null; Add-Content -Path `"`$HOME\.ssh\authorized_keys`" -Value `$input`""
 ```
 
-**Cara 2 (Manual Langsung di Komputer Windows 11 Target):**
+**Method 2 (Manual on target Windows 11):**
 
-1. Buka PowerShell biasa (sebagai user tersebut) di Windows 11 target.
-2. Buat folder `.ssh` dan file `authorized_keys`:
+1. Open PowerShell on the target computer under your user account.
+2. Create the `.ssh` directory and `authorized_keys` file:
 
    ```powershell
-   # Buat folder .ssh jika belum ada
    New-Item -ItemType Directory -Force -Path "$HOME\.ssh" | Out-Null
-
-   # Buat file authorized_keys jika belum ada
    New-Item -ItemType File -Force -Path "$HOME\.ssh\authorized_keys" | Out-Null
    ```
 
-3. Buka dan tempelkan public key (misal menggunakan Notepad):
+3. Paste your public key into the file (for example, with Notepad):
 
    ```powershell
    notepad "$HOME\.ssh\authorized_keys"
    ```
 
-   _Paste_ isi `id_ed25519.pub` ke Notepad, lalu Save (`Ctrl + S`) dan Close.
+   Paste the contents of `id_ed25519.pub`, save (`Ctrl + S`), and close.
 
-   _(Atau langsung via PowerShell satu baris):_
+   Or append directly via PowerShell in a single line:
 
    ```powershell
    Add-Content -Path "$HOME\.ssh\authorized_keys" -Value "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... user@client"
    ```
 
-4. **PENTING: Atur Hak Akses (Permissions / ACL)**
-   Windows OpenSSH akan menolak autentikasi jika file `authorized_keys` bisa diakses oleh akun lain. Kunci permission hanya untuk user Anda dan SYSTEM:
+4. **Required: Configure File Access Permissions (ACL)**
+   Windows OpenSSH denies key-based authentication if `authorized_keys` is accessible by other non-system users. Restrict permissions to your current user and SYSTEM:
+
    ```powershell
-   # Putus inheritance dan batasi izin hanya untuk user aktif & SYSTEM
    icacls.exe "$HOME\.ssh\authorized_keys" /inheritance:r /grant:r "$($env:USERNAME):(R,W)" /grant:r "SYSTEM:(F)"
    ```
 
-#### Kasus B: User Administrator (Default di kebanyakan Windows 11)
+#### Case B: Administrator User (Default on most Windows 11 installations)
 
-Windows OpenSSH secara default mengabaikan `~/.ssh/authorized_keys` jika akun termasuk grup `Administrators`.
+Windows OpenSSH ignores `~/.ssh/authorized_keys` by default for users in the `Administrators` group.
 
-Pilih salah satu solusi di bawah:
+Select one of the solutions below:
 
-**Opsi 1 (Disarankan: Samakan dengan standar OpenSSH):**
+**Option 1 (Recommended: Standardize with OpenSSH defaults):**
 
-1. Buka PowerShell (Run as Administrator) di Windows 11 target.
-2. Edit file konfigurasi `C:\ProgramData\ssh\sshd_config`:
-   Beri tanda komentar (`#`) pada 2 baris paling bawah:
-   ```
+1. Open PowerShell (Run as Administrator) on target Windows 11.
+2. Edit `C:\ProgramData\ssh\sshd_config` and comment out the last two lines:
+
+   ```text
    #Match Group administrators
    #       AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys
    ```
-3. Restart OpenSSH service di target:
+
+3. Restart the OpenSSH service on target:
+
    ```powershell
    Restart-Service sshd
    ```
-4. Setelah itu, ikuti perintah **Kasus A** di atas (`~/.ssh/authorized_keys` akan aktif untuk semua user).
 
-**Opsi 2 (Tanpa ubah sshd_config):**
-Jalankan di PowerShell (Admin) di Windows 11 target:
+4. Follow **Case A** above (`~/.ssh/authorized_keys` will now be active for all accounts).
+
+**Option 2 (Without editing sshd_config):**
+
+Run in PowerShell (Admin) on target Windows 11:
 
 ```powershell
-# Buat file administrators_authorized_keys jika belum ada
 New-Item -ItemType File -Force -Path "C:\ProgramData\ssh\administrators_authorized_keys" | Out-Null
-
-# Masukkan public key Anda ke file tersebut
 Add-Content -Path "C:\ProgramData\ssh\administrators_authorized_keys" -Value "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... user@client"
-
-# Atur ACL permission wajib (hanya SYSTEM dan Administrators)
 icacls.exe "C:\ProgramData\ssh\administrators_authorized_keys" /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F"
 ```
 
 ---
 
-## Langkah 1: Copy Project ke Komputer Target (SCP)
+## Step 1: Copy Project to Target Machine (SCP)
 
-Jalankan di **PowerShell lokal** (komputer CCTV sumber):
+Run from local PowerShell:
 
 ```powershell
-# PENTING: Pastikan folder target sudah ada dulu
-# (Default shell OpenSSH Windows adalah cmd.exe, gunakan mkdir bawaan cmd)
-ssh user@<ip_target> "if not exist C:\CCTV mkdir C:\CCTV"
+# Ensure destination folder exists
+ssh user@<target_ip> "if not exist C:\CCTV mkdir C:\CCTV"
 
-# Copy HANYA folder bin dan start_cctv.bat
-scp -r C:\CCTV\bin C:\CCTV\start_cctv.bat user@<ip_target>:C:/CCTV/
+# Copy required bin folder and start_cctv.bat script
+scp -r C:\CCTV\bin C:\CCTV\start_cctv.bat user@<target_ip>:C:/CCTV/
 ```
 
-> **Kenapa hanya file tertentu?** Folder lain seperti `tmp` dan `log` akan dibuat secara otomatis oleh script, sedangkan `README.md` tidak dibutuhkan di komputer target.
->
-> Masukkan password saat diminta.
+> **Why only specific files?** Runtime folders like `tmp` and `log` are generated automatically upon server launch. `README.md` is not required on the target machine.
 
 ---
 
-## Langkah 2: Masuk via SSH
+## Step 2: Connect via SSH
 
 ```powershell
-ssh user@<ip_target>
+ssh user@<target_ip>
 ```
 
 ---
 
-## Langkah 3: Install Dependencies di Komputer Target
+## Step 3: Install Dependencies on Target Machine
 
-Setelah masuk SSH, jalankan:
+After connecting via SSH, run:
 
 ```powershell
 pip install flask opencv-python
@@ -136,79 +129,77 @@ pip install flask opencv-python
 
 ---
 
-## Langkah 4: Operasi Start / Stop / Status (via SSH)
+## Step 4: Start, Stop, and Status Management (via SSH)
 
-Skrip Control Panel (`start_cctv.bat`) dapat dioperasikan secara **interaktif** maupun langsung via **CLI flags satu baris** (sangat ideal untuk otomasi SSH):
+The control panel script ([`start_cctv.bat`](start_cctv.bat)) supports both interactive mode and direct one-line CLI arguments:
 
-### Cara 1: Langsung via Parameter CLI (Direkomendasikan via SSH)
+### Method 1: Direct CLI Flags (Recommended for SSH Automation)
 
-Jalankan perintah langsung dari sesi SSH lokal tanpa harus membuka menu interaktif:
+Run commands directly from your local terminal:
 
 ```powershell
-# Cek status server
-ssh user@<ip_target> "C:\CCTV\start_cctv.bat --status"
+# Check server status
+ssh user@<target_ip> "C:\CCTV\start_cctv.bat --status"
 
-# Jalankan server secara tersembunyi di background
-ssh user@<ip_target> "C:\CCTV\start_cctv.bat --background"
+# Run server in the background
+ssh user@<target_ip> "C:\CCTV\start_cctv.bat --background"
 
-# Hentikan server secara graceful
-ssh user@<ip_target> "C:\CCTV\start_cctv.bat --stop"
+# Stop server gracefully
+ssh user@<target_ip> "C:\CCTV\start_cctv.bat --stop"
 
-# Ambil foto snapshot langsung
-ssh user@<ip_target> "C:\CCTV\start_cctv.bat --snapshot"
+# Capture a camera snapshot
+ssh user@<target_ip> "C:\CCTV\start_cctv.bat --snapshot"
 ```
 
-### Cara 2: Menu Interaktif
+### Method 2: Interactive Menu
 
-1.  Masuk melalui SSH ke komputer target:
-    ```powershell
-    ssh user@<ip_target>
-    ```
-2.  Eksekusi file Control Panel secara langsung:
-    ```cmd
-    C:\CCTV\start_cctv.bat
-    ```
-3.  Menu antarmuka Control Panel akan muncul dan mendeteksi status terbaru (`RUNNING` / `STOPPED`).
-4.  Pilih opsi **2** untuk _Start CCTV Server (Background)_ atau **3** untuk _Stop CCTV Server_ sesuai kebutuhan.
-
-Skrip mendukung multi-backend kamera (MSMF dan DSHOW) serta penghentian terkontrol melalui berkas `stop.marker`, memastikan pelepasan driver kamera berlangsung bersih dan lampu indikator kamera mati saat proses dihentikan.
+1. Connect to target machine via SSH:
+   ```powershell
+   ssh user@<target_ip>
+   ```
+2. Run the control panel script:
+   ```cmd
+   C:\CCTV\start_cctv.bat
+   ```
+3. The menu displays the current status (`RUNNING` or `STOPPED`).
+4. Select option **2** to start the background server or option **3** to stop it.
 
 ---
 
-## Akses Live View dari Browser
+## Viewing Camera Stream
 
-Setelah server running di `<ip_target>`, buka browser di komputer manapun yang berada dalam jaringan yang sama / terhubung Tailscale:
+Once the server is running on `<target_ip>`, open a browser on any machine within the same local network or Tailscale mesh:
 
-| URL                              | Fungsi                             |
-| -------------------------------- | ---------------------------------- |
-| `http://<ip_target>:5000/`       | Halaman HTML dengan auto-reconnect |
-| `http://<ip_target>:5000/stream` | Raw MJPEG stream                   |
-| `http://<ip_target>:5000/status` | JSON status server                 |
+| URL                              | Description                       |
+| -------------------------------- | --------------------------------- |
+| `http://<target_ip>:5000/`       | Web viewer UI with auto-reconnect |
+| `http://<target_ip>:5000/stream` | Raw multipart MJPEG video stream  |
+| `http://<target_ip>:5000/status` | Server status JSON                |
 
 ---
 
-## Autostart saat Boot (opsional, jalankan dari SSH)
+## Background Autostart on Boot (Optional, via SSH)
 
-Server berjalan di latar belakang (background) tanpa jendela terminal menggunakan `pythonw.exe`. Pilih salah satu metode autostart berikut:
+The server runs silently in the background without a terminal window using `pythonw.exe`. Select one of the following autostart options:
 
-### Cara A: CLI Flag Otomatis (Direkomendasikan via SSH, tanpa admin)
+### Option A: Automatic CLI Flags (Recommended, No Admin Required)
 
-Jalankan langsung melalui SSH:
+Run directly through SSH:
 
 ```powershell
-# Aktifkan autostart latar belakang (membuat shortcut ke pythonw.exe di folder Startup pengguna)
-ssh user@<ip_target> "C:\CCTV\start_cctv.bat --enable-autostart"
+# Enable silent background autostart (creates startup shortcut targeting pythonw.exe)
+ssh user@<target_ip> "C:\CCTV\start_cctv.bat --enable-autostart"
 
-# Nonaktifkan autostart
-ssh user@<ip_target> "C:\CCTV\start_cctv.bat --disable-autostart"
+# Disable autostart
+ssh user@<target_ip> "C:\CCTV\start_cctv.bat --disable-autostart"
 ```
 
-> Menyala otomatis di background setiap kali user login ke Windows (tanpa jendela terminal). Ekuivalen dengan opsi **5/6** di Control Panel.
+> Starts silently in the background whenever the user logs into Windows. Equivalent to options **5** and **6** in the interactive menu.
 
-### Cara B: Scheduled Task (butuh admin)
+### Option B: Windows Scheduled Task (Requires Admin Privileges)
 
 ```powershell
-# Enable (gunakan pythonw dan trigger AtLogOn agar memiliki akses driver webcam pengguna)
+# Enable (uses pythonw and AtLogOn trigger to preserve desktop camera access)
 $action = New-ScheduledTaskAction `
   -Execute "pythonw" `
   -Argument "bin\cctv.py" `

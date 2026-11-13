@@ -1,68 +1,68 @@
 # Windows Private CCTV Server
 
-Server CCTV lokal berbasis Windows untuk streaming video langsung (MJPEG) melalui browser tanpa fitur perekaman disk. Dapat diakses melalui jaringan lokal (LAN/Wi-Fi) atau jarak jauh menggunakan Tailscale.
+A lightweight Windows-based local CCTV server for live video streaming (MJPEG) directly through a web browser without disk recording. Accessible over local network (LAN/Wi-Fi) or remotely via Tailscale.
 
-## Struktur Direktori
+## Directory Structure
 
 ```text
 C:\CCTV\
-│   start_cctv.bat      # Panel kontrol CLI dan automasi
+│   start_cctv.bat      # CLI control panel and automation script
 │
 ├───bin\
-│       cctv.py         # Aplikasi server Python (Flask + OpenCV)
+│       cctv.py         # Python server application (Flask + OpenCV)
 │
 ├───log\
-│       cctv_server.log      # Log server (rotasi 5 MB x 2 berkas)
-│       cctv_console_out.log # Saluran stdout mode background
-│       cctv_console_err.log # Saluran stderr mode background
+│       cctv_server.log      # Application logs (rotating 5 MB x 2 files)
+│       cctv_console_out.log # stdout redirect for background mode
+│       cctv_console_err.log # stderr redirect for background mode
 │
 └───tmp\
-        cctv.pid        # ID proses server aktif
-        stop.marker     # Berkas penanda penghentian (graceful shutdown)
+        cctv.pid        # Active process PID file
+        stop.marker     # Marker file for graceful shutdown
 ```
 
-## Kemampuan Utama
+## Key Features
 
-- **Streaming browser tanpa dependensi klien**: Mengalirkan format MJPEG standar langsung ke peramban tanpa perlu memasang pemutar video terpisah.
-- **Dukungan multi-backend kamera**: Membuka kamera melalui Media Foundation (MSMF) atau DirectShow (DSHOW), serta melakukan pemindaian otomatis index kamera (0, 1, atau 2).
-- **Efisiensi daya dan pemrosesan**: Menghentikan proses kompresi JPEG jika tidak ada klien yang menonton, dan menunda pengiriman frame saat tab browser tidak aktif.
-- **Operasi latar belakang terisolasi**: Berjalan sebagai proses mandiri (WMI) agar tetap aktif saat sesi SSH terputus.
-- **Penghentian terkontrol (graceful shutdown)**: Menutup tangkapan kamera lewat berkas penanda agar lampu indikator mati dan perangkat keras terlepas bersih tanpa proses zombie.
-- **Otomasi CLI dan SSH**: Seluruh fungsi panel dapat dipanggil langsung satu baris tanpa membuka antarmuka menu.
-- **REST API**: Endpoint terintegrasi untuk pengambilan foto instan (JPEG) dan data status operasional (JSON).
+- **Browser streaming without client dependencies**: Streams standard multipart MJPEG directly to modern browsers without third-party video players.
+- **Multi-backend camera support**: Opens cameras using Media Foundation (MSMF) or DirectShow (DSHOW), with automatic index fallback (probes index 0, 1, or 2).
+- **Power and resource efficiency**: Pauses JPEG frame compression when no viewers are connected, and pauses frame transmission when the browser tab is hidden.
+- **Isolated background execution**: Spawns as an independent background process via WMI and `pythonw.exe` to remain active even when SSH sessions disconnect.
+- **Controlled graceful shutdown**: Releases camera hardware cleanly using a marker file to ensure indicator lights turn off and prevent zombie processes.
+- **CLI and SSH automation**: All control panel operations can be run directly from one-line CLI commands without launching the interactive menu.
+- **REST API**: Built-in endpoints for instant snapshot capture (JPEG) and operational health status (JSON).
 
-## Kebutuhan Sistem
+## System Requirements
 
-| Komponen       | Kebutuhan Minimum            | Rekomendasi                                      |
-| -------------- | ---------------------------- | ------------------------------------------------ |
-| Sistem Operasi | Windows 7 64-bit             | Windows 10/11 64-bit                             |
-| Memori (RAM)   | 512 MB                       | 1 GB atau lebih                                  |
-| Kamera         | Webcam USB eksternal         | Webcam bawaan laptop                             |
-| Lingkungan     | Python 3.9                   | Python 3.12 atau lebih baru                      |
-| Jaringan       | Jaringan lokal (LAN / Wi-Fi) | Tailscale terpasang di server dan klien pemantau |
+| Component        | Minimum Requirement         | Recommended                                      |
+| ---------------- | --------------------------- | ------------------------------------------------ |
+| Operating System | Windows 7 64-bit            | Windows 10/11 64-bit                             |
+| Memory (RAM)     | 512 MB                      | 1 GB or more                                     |
+| Camera           | External USB webcam         | Built-in laptop webcam                           |
+| Environment      | Python 3.9                  | Python 3.12 or newer                             |
+| Network          | Local network (LAN / Wi-Fi) | Tailscale installed on server and viewing device |
 
-## Persiapan
+## Prerequisites
 
-1. Pasang Python 3.9 atau yang lebih baru dari [python.org](https://www.python.org/downloads/). Pastikan opsi **Add Python to PATH** dicentang saat instalasi.
-2. Di Windows 10 atau 11, buka **Settings > Privacy & security > Camera**, lalu pastikan opsi **Let desktop apps access your camera** dalam status **On**.
-3. Jika menggunakan laptop yang layarnya sering ditutup, buka **Power Options** dan atur tindakan saat penutup layar ditutup (_When I close the lid_) ke **Do nothing**.
-4. Pasang Tailscale pada komputer server dan perangkat pemantau jika ingin mengakses di luar jaringan lokal.
+1. Install Python 3.9 or newer from [python.org](https://www.python.org/downloads/). Ensure **Add Python to PATH** is checked during setup.
+2. On Windows 10 or 11, open **Settings > Privacy & security > Camera**, and verify that **Let desktop apps access your camera** is set to **On**.
+3. If using a laptop with the lid closed, open **Power Options** and set **When I close the lid** to **Do nothing**.
+4. Install Tailscale on both the server and monitoring devices for remote access outside the local network.
 
-## Pemasangan & Menjalankan Server
+## Installation & Running the Server
 
-### 1. Pasang Paket Dependensi
+### 1. Install Dependencies
 
-Buka terminal dan jalankan:
+Open a terminal and run:
 
 ```cmd
 pip install flask opencv-python
 ```
 
-Untuk perangkat dengan sumber daya terbatas, `opencv-python-headless` dapat digunakan sebagai pengganti `opencv-python`.
+For resource-constrained devices, `opencv-python-headless` can be installed instead of `opencv-python`.
 
-### 2. Menjalankan Panel Kontrol
+### 2. Launch the Control Panel
 
-Klik ganda berkas [`start_cctv.bat`](start_cctv.bat) untuk membuka menu interaktif:
+Double-click [`start_cctv.bat`](start_cctv.bat) to open the interactive menu:
 
 ```text
 ==========================================
@@ -84,48 +84,48 @@ Klik ganda berkas [`start_cctv.bat`](start_cctv.bat) untuk membuka menu interakt
 ==========================================
 ```
 
-### 3. Operasi Langsung via CLI / SSH
+### 3. Direct CLI & SSH Commands
 
-Perintah dapat dijalankan langsung tanpa menu:
+Run commands directly without entering the menu:
 
 ```cmd
-start_cctv.bat --start               # Jalankan di jendela terminal baru
-start_cctv.bat --background          # Jalankan tersembunyi di latar belakang
-start_cctv.bat --status              # Cek status proses server
-start_cctv.bat --snapshot            # Ambil foto seketika ke direktori log
-start_cctv.bat --stop                # Hentikan proses server secara aman
-start_cctv.bat --enable-autostart    # Aktifkan autostart latar belakang (saat login)
-start_cctv.bat --disable-autostart   # Nonaktifkan autostart latar belakang
+start_cctv.bat --start               # Run in a new visible console window
+start_cctv.bat --background          # Run hidden in background via pythonw
+start_cctv.bat --status              # Check server process status
+start_cctv.bat --snapshot            # Capture immediate photo to log folder
+start_cctv.bat --stop                # Gracefully stop the server process
+start_cctv.bat --enable-autostart    # Enable silent background autostart on login
+start_cctv.bat --disable-autostart   # Disable login autostart
 ```
 
-Panduan lengkap instalasi tanpa monitor (headless) dan pengaturan SSH key tersedia di [`deploy-via-ssh.md`](deploy-via-ssh.md).
+Detailed instructions for headless setup and SSH keys are available in [`deploy-via-ssh.md`](deploy-via-ssh.md).
 
-### 4. Konfigurasi Parameter (Opsional)
+### 4. Optional Configuration Flags
 
-Server berjalan di port `5000` dengan batas 10 FPS secara default. Parameter ini dapat disesuaikan pada berkas [`start_cctv.bat`](start_cctv.bat) atau saat mengeksekusi skrip:
+The server defaults to port `5000` at 10 FPS. Customize these parameters in [`start_cctv.bat`](start_cctv.bat) or by running the script directly:
 
 ```cmd
 python bin\cctv.py --port 8080 --fps 15 --quality 50 --width 1280 --height 720
 ```
 
-## Mengakses Tampilan Kamera
+## Viewing Camera Stream
 
-Buka peramban di perangkat pemantau lalu buka alamat IP komputer server:
+Open a web browser on any device in the network and navigate to the server's IP address:
 
 ```text
 http://<ip_target>:5000/
 ```
 
-### Daftar Endpoint HTTP
+### HTTP Endpoints
 
-| Endpoint    | Keterangan                                                            |
-| ----------- | --------------------------------------------------------------------- |
-| `/`         | Antarmuka web pemantau dengan rekoneksi otomatis                      |
-| `/stream`   | Aliran murni multipart MJPEG                                          |
-| `/snapshot` | Unduh satu frame gambar JPEG terkini                                  |
-| `/status`   | Status server berformat JSON (uptime, kondisi kamera, penonton aktif) |
+| Endpoint    | Description                                                |
+| ----------- | ---------------------------------------------------------- |
+| `/`         | Web viewer UI with auto-reconnect                          |
+| `/stream`   | Raw multipart MJPEG video stream                           |
+| `/snapshot` | Download the latest single JPEG frame                      |
+| `/status`   | Server status JSON (uptime, camera health, active viewers) |
 
-Contoh respon `/status`:
+Sample `/status` JSON response:
 
 ```json
 {
